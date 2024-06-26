@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ぷよぷよゲーム</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+        #game-container {
+            text-align: center;
+        }
+        #game-board {
+            border: 2px solid #333;
+            display: inline-block;
+        }
+        .cell {
+            width: 30px;
+            height: 30px;
+            border: 1px solid #ccc;
+            display: inline-block;
+        }
+        .puyo {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .red { background-color: red; }
+        .blue { background-color: blue; }
+        .green { background-color: green; }
+        .yellow { background-color: yellow; }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <h1>ぷよぷよゲーム</h1>
+        <div id="game-board"></div>
+        <p>スコア: <span id="score">0</span></p>
+        <button id="start-button">ゲーム開始</button>
+    </div>
+
+    <script>
+        const ROWS = 12;
+        const COLS = 6;
+        const COLORS = ['red', 'blue', 'green', 'yellow'];
+        let board = [];
+        let currentPuyo = null;
+        let score = 0;
+        let gameInterval = null;
+
+        function createBoard() {
+            const gameBoard = document.getElementById('game-board');
+            for (let i = 0; i < ROWS; i++) {
+                board[i] = [];
+                for (let j = 0; j < COLS; j++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    gameBoard.appendChild(cell);
+                    board[i][j] = cell;
+                }
+                gameBoard.appendChild(document.createElement('br'));
+            }
+        }
+
+        function createPuyo() {
+            const color1 = COLORS[Math.floor(Math.random() * COLORS.length)];
+            const color2 = COLORS[Math.floor(Math.random() * COLORS.length)];
+            currentPuyo = { x: 2, y: 0, color1, color2, rotation: 0 };
+            drawPuyo();
+        }
+
+        function drawPuyo() {
+            clearBoard();
+            const { x, y, color1, color2, rotation } = currentPuyo;
+            if (y < ROWS && x < COLS) {
+                board[y][x].innerHTML = `<div class="puyo ${color1}"></div>`;
+            }
+            let secondY = y;
+            let secondX = x;
+            if (rotation === 0) secondY++;
+            else if (rotation === 1) secondX++;
+            else if (rotation === 2) secondY--;
+            else if (rotation === 3) secondX--;
+            
+            if (secondY < ROWS && secondX < COLS && secondY >= 0 && secondX >= 0) {
+                board[secondY][secondX].innerHTML = `<div class="puyo ${color2}"></div>`;
+            }
+        }
+
+        function clearBoard() {
+            for (let i = 0; i < ROWS; i++) {
+                for (let j = 0; j < COLS; j++) {
+                    board[i][j].innerHTML = '';
+                }
+            }
+        }
+
+        function movePuyo(direction) {
+            if (direction === 'left' && canMove(currentPuyo.x - 1, currentPuyo.y)) {
+                currentPuyo.x--;
+            } else if (direction === 'right' && canMove(currentPuyo.x + 1, currentPuyo.y)) {
+                currentPuyo.x++;
+            } else if (direction === 'down' && canMove(currentPuyo.x, currentPuyo.y + 1)) {
+                currentPuyo.y++;
+            } else if (direction === 'rotate') {
+                rotatePuyo();
+            }
+            drawPuyo();
+        }
+
+        function canMove(x, y) {
+            return x >= 0 && x < COLS && y < ROWS && board[y][x].innerHTML === '';
+        }
+
+        function rotatePuyo() {
+            currentPuyo.rotation = (currentPuyo.rotation + 1) % 4;
+        }
+
+        function gameLoop() {
+            if (canMove(currentPuyo.x, currentPuyo.y + 1)) {
+                movePuyo('down');
+            } else {
+                placePuyo();
+                if (checkGameOver()) {
+                    endGame();
+                    return;
+                }
+                createPuyo();
+            }
+        }
+
+        function placePuyo() {
+            const { x, y, color1, color2, rotation } = currentPuyo;
+            board[y][x].innerHTML = `<div class="puyo ${color1}"></div>`;
+            let secondY = y;
+            let secondX = x;
+            if (rotation === 0) secondY++;
+            else if (rotation === 1) secondX++;
+            else if (rotation === 2) secondY--;
+            else if (rotation === 3) secondX--;
+            
+            if (secondY < ROWS && secondX < COLS && secondY >= 0 && secondX >= 0) {
+                board[secondY][secondX].innerHTML = `<div class="puyo ${color2}"></div>`;
+            }
+            checkMatches();
+        }
+
+        function checkMatches() {
+            let matched = false;
+            for (let i = 0; i < ROWS; i++) {
+                for (let j = 0; j < COLS; j++) {
+                    if (board[i][j].innerHTML !== '') {
+                        const color = board[i][j].firstChild.className.split(' ')[1];
+                        if (checkAdjacentMatches(i, j, color, [])) {
+                            matched = true;
+                        }
+                    }
+                }
+            }
+            if (matched) {
+                setTimeout(() => {
+                    dropPuyos();
+                    checkMatches();
+                }, 100);
+            }
+        }
+
+        function checkAdjacentMatches(row, col, color, matched) {
+            if (row < 0 || row >= ROWS || col < 0 || col >= COLS || 
+                board[row][col].innerHTML === '' || 
+                board[row][col].firstChild.className.split(' ')[1] !== color ||
+                matched.some(m => m.row === row && m.col === col)) {
+                return matched.length >= 4;
+            }
+
+            matched.push({row, col});
+
+            const directions = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+            let isMatched = false;
+
+            for (let [dx, dy] of directions) {
+                if (checkAdjacentMatches(row + dx, col + dy, color, matched)) {
+                    isMatched = true;
+                }
+            }
+
+            if (isMatched || matched.length >= 4) {
+                score += 10;
+                document.getElementById('score').textContent = score;
+                board[row][col].innerHTML = '';
+                return true;
+            }
+
+            matched.pop();
+            return false;
+        }
+
+        function dropPuyos() {
+            for (let j = 0; j < COLS; j++) {
+                let emptyRow = ROWS - 1;
+                for (let i = ROWS - 1; i >= 0; i--) {
+                    if (board[i][j].innerHTML !== '') {
+                        if (i !== emptyRow) {
+                            board[emptyRow][j].innerHTML = board[i][j].innerHTML;
+                            board[i][j].innerHTML = '';
+                        }
+                        emptyRow--;
+                    }
+                }
+            }
+        }
+
+        function checkGameOver() {
+            return board[0].some(cell => cell.innerHTML !== '');
+        }
+
+        function endGame() {
+            clearInterval(gameInterval);
+            alert('ゲームオーバー！ スコア: ' + score);
+        }
+
+        function startGame() {
+            createBoard();
+            createPuyo();
+            gameInterval = setInterval(gameLoop, 1000);
+            document.addEventListener('keydown', handleKeyPress);
+        }
+
+        function handleKeyPress(e) {
+            switch(e.key) {
+                case 'ArrowLeft':
+                    movePuyo('left');
+                    break;
+                case 'ArrowRight':
+                    movePuyo('right');
+                    break;
+                case 'ArrowDown':
+                    movePuyo('down');
+                    break;
+                case 'ArrowUp':
+                    movePuyo('rotate');
+                    break;
+            }
+        }
+
+        document.getElementById('start-button').addEventListener('click', startGame);
+    </script>
+</body>
+</html>
